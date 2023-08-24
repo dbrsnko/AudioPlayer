@@ -15,4 +15,4 @@ A simple multiplatform audioplayer that could be used on both PC and Android
 -[ ] Design improvements
     -[ ] Make buttons more "buttony" (square, with symbols)
     -[ ] Add constant loop play function (song restarts after it ended)
-    
+-
