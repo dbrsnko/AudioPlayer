@@ -2,8 +2,9 @@
 A simple multiplatform audioplayer that could be used on both PC and Android
 ## TODO:
 -[ ] Make a time position tracker
-    -[ ] Make a progress bar object
-    -[ ] Make a current time position value display and an overall length value display somewhere around progress bar
+    -[X] Make a slider object
+    -[X] Make a current time position value display and an overall length value display somewhere around progress bar
+    -[ ] Align time labels properly
 -[ ] Make an album cover display
     -[ ] Default cover is always present and changes if song got one
     -[ ] Cover changes accordingly or revert to default when the next song is picked

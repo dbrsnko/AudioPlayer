@@ -30,7 +30,13 @@ MainComponent::MainComponent() : state(Stopped)
     addAndMakeVisible(&progressSlider);
     progressSlider.setSliderStyle(juce::Slider::SliderStyle::LinearHorizontal);
     progressSlider.setTextBoxStyle(juce::Slider::NoTextBox, true, 50, 25); //TODO make textbox appear/reapper after moving it
+    progressSlider.setEnabled(false);
     
+    addAndMakeVisible(&currentPositionLabel);
+    currentPositionLabel.setText("Stopped", juce::dontSendNotification);
+    addAndMakeVisible(&totalLengthLabel);
+    totalLengthLabel.setText("00:00", juce::dontSendNotification);
+    addAndMakeVisible(&hostLabel);
 
     addAndMakeVisible(&playButton);
     playButton.setButtonText("Play");
@@ -105,12 +111,21 @@ void MainComponent::resized()
 {
     auto area = getLocalBounds();
     auto contentItemHeight = 30;
+    auto margin = 5;
 
     openButton.setBounds(area.removeFromTop(contentItemHeight));
     progressSlider.setBounds(area.removeFromTop(contentItemHeight));
+    currentPositionLabel.setBounds(area.removeFromTop(contentItemHeight));
+    totalLengthLabel.setBounds(area.removeFromTop(contentItemHeight));
+
+    //hostLabel.setBounds(area.removeFromTop(contentItemHeight+10));
+
+    
+    //currentPositionLabel.setBounds(area.removeFromLeft(contentItemHeight).reduced(margin));
+    //totalLengthLabel.setBounds(area.removeFromRight(area.getWidth() / 2));
     playButton.setBounds(area.removeFromTop(contentItemHeight));
     stopButton.setBounds(area.removeFromTop(contentItemHeight));
-    //stopButton.setBounds(10, 10, getWidth() - 20, 30);
+    
     // This is called when the MainContentComponent is resized.
     // If you add any child components, this is where you should
     // update their positions.
@@ -132,22 +147,22 @@ void MainComponent::timerCallback()
     if (transportSource.isPlaying())
     {
         juce::RelativeTime position(transportSource.getCurrentPosition());
-        progressSlider.setRange(0, transportSource.getLengthInSeconds(), 0); //sets timer slider limits
+        
 
         auto minutes = ((int)position.inMinutes()) % 60;
         auto seconds = ((int)position.inSeconds()) % 60;
-        auto millis = ((int)position.inMilliseconds()) % 1000;
 
-        auto positionString = juce::String::formatted("%02d:%02d:%03d", minutes, seconds, millis);
-        //currentPositionLabel.setText(positionString, juce::dontSendNotification);
-
+        auto positionString = juce::String::formatted("%02d:%02d", minutes, seconds);
+        currentPositionLabel.setText(positionString, juce::dontSendNotification);
         progressSlider.setValue(transportSource.getCurrentPosition());
         
     }
     else
     {
         progressSlider.setValue(transportSource.getCurrentPosition());
-        //currentPositionLabel.setText("Stopped", juce::dontSendNotification);
+        if(transportSource.getCurrentPosition()==0)
+        currentPositionLabel.setText("00:00", juce::dontSendNotification);
+            
     }
 }
 void MainComponent::changeState(TransportState newState){
@@ -207,7 +222,16 @@ void MainComponent::openButtonClicked() {
                     changeState(Stopped);//changes state so no play blocking occurs (if song is playing during selection of another song it causes soft block)
                     auto newSource = std::make_unique<juce::AudioFormatReaderSource>(reader, true);                     
                     transportSource.setSource(newSource.get(), 0, nullptr, reader->sampleRate);       
-                    playButton.setEnabled(true);                    
+                    playButton.setEnabled(true);
+                    progressSlider.setEnabled(true);
+
+                    juce::RelativeTime position(transportSource.getLengthInSeconds());
+                    auto minutes = ((int)position.inMinutes()) % 60;
+                    auto seconds = ((int)position.inSeconds()) % 60;
+                    auto positionString = juce::String::formatted("%02d:%02d", minutes, seconds);                    
+                    totalLengthLabel.setText(positionString, juce::dontSendNotification);
+
+                    progressSlider.setRange(0, transportSource.getLengthInSeconds(), 0); //sets timer slider limits, juce::RelativeTime is incompatible so *getLengthInSeconds()*
                     this->playButtonClicked(); //plays song automatically                  
                     readerSource.reset(newSource.release());                                          
                 }

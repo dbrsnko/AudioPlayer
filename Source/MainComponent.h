@@ -42,6 +42,9 @@ private:
     juce::TextButton playButton;
     juce::TextButton stopButton;
     juce::Slider progressSlider;
+    juce::Label currentPositionLabel;
+    juce::Label totalLengthLabel;
+    juce::Label hostLabel; //purely for making a layout, providing a space for two labels
     void openButtonClicked();
     void playButtonClicked();
     void stopButtonClicked();
