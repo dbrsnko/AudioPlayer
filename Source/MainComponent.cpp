@@ -27,6 +27,11 @@ MainComponent::MainComponent() : state(Stopped)
     openButton.setButtonText("Open...");
     openButton.onClick = [this] { openButtonClicked(); };
 
+    addAndMakeVisible(&progressSlider);
+    progressSlider.setSliderStyle(juce::Slider::SliderStyle::LinearHorizontal);
+    progressSlider.setTextBoxStyle(juce::Slider::NoTextBox, true, 50, 25); //TODO make textbox appear/reapper after moving it
+    
+
     addAndMakeVisible(&playButton);
     playButton.setButtonText("Play");
     playButton.onClick = [this] { playButtonClicked(); };
@@ -38,7 +43,9 @@ MainComponent::MainComponent() : state(Stopped)
     stopButton.onClick = [this] { stopButtonClicked(); };
     stopButton.setColour(juce::TextButton::buttonColourId, juce::Colours::red);
     stopButton.setEnabled(false);
+
     transportSource.addChangeListener(this);
+    startTimer(20); //20 ms interval
 }
 
 MainComponent::~MainComponent()
@@ -69,10 +76,9 @@ void MainComponent::getNextAudioBlock (const juce::AudioSourceChannelInfo& buffe
     }
 
     transportSource.getNextAudioBlock(bufferToFill);
+    //progressSliderprogressSliderprogressSliderprogressSliderprogressSliderprogressSlider
     // Your audio-processing code goes here!
-
     // For more details, see the help for AudioProcessor::getNextAudioBlock()
-
     // Right now we are not producing any data, in which case we need to clear the buffer
     // (to prevent the output of random noise)
 }
@@ -99,7 +105,9 @@ void MainComponent::resized()
 {
     auto area = getLocalBounds();
     auto contentItemHeight = 30;
+
     openButton.setBounds(area.removeFromTop(contentItemHeight));
+    progressSlider.setBounds(area.removeFromTop(contentItemHeight));
     playButton.setBounds(area.removeFromTop(contentItemHeight));
     stopButton.setBounds(area.removeFromTop(contentItemHeight));
     //stopButton.setBounds(10, 10, getWidth() - 20, 30);
@@ -119,6 +127,29 @@ void MainComponent::changeListenerCallback(juce::ChangeBroadcaster* source)
             changeState(Paused);
     }
 }
+void MainComponent::timerCallback()
+{
+    if (transportSource.isPlaying())
+    {
+        juce::RelativeTime position(transportSource.getCurrentPosition());
+        progressSlider.setRange(0, transportSource.getLengthInSeconds(), 0); //sets timer slider limits
+
+        auto minutes = ((int)position.inMinutes()) % 60;
+        auto seconds = ((int)position.inSeconds()) % 60;
+        auto millis = ((int)position.inMilliseconds()) % 1000;
+
+        auto positionString = juce::String::formatted("%02d:%02d:%03d", minutes, seconds, millis);
+        //currentPositionLabel.setText(positionString, juce::dontSendNotification);
+
+        progressSlider.setValue(transportSource.getCurrentPosition());
+        
+    }
+    else
+    {
+        progressSlider.setValue(transportSource.getCurrentPosition());
+        //currentPositionLabel.setText("Stopped", juce::dontSendNotification);
+    }
+}
 void MainComponent::changeState(TransportState newState){
     if (state != newState)
     {
@@ -128,7 +159,6 @@ void MainComponent::changeState(TransportState newState){
         {
         case Stopped:
             playButton.setButtonText("Play");
-            stopButton.setButtonText("Stop");
             stopButton.setEnabled(false);
             transportSource.setPosition(0.0);
             break;
@@ -139,7 +169,6 @@ void MainComponent::changeState(TransportState newState){
 
         case Playing:
             playButton.setButtonText("Pause");
-            stopButton.setButtonText("Stop");
             stopButton.setEnabled(true);
             break;
 
@@ -161,24 +190,26 @@ void MainComponent::changeState(TransportState newState){
 void MainComponent::openButtonClicked() {
     chooser = std::make_unique<juce::FileChooser>("Select a file to play...",
         juce::File{},
-        "*.wav,*.mp3,*.aiff");                     // [7]
+        "*.wav,*.mp3,*.aiff");                     
     auto chooserFlags = juce::FileBrowserComponent::openMode
         | juce::FileBrowserComponent::canSelectFiles;
 
-    chooser->launchAsync(chooserFlags, [this](const juce::FileChooser& fc)     // [8]
+    chooser->launchAsync(chooserFlags, [this](const juce::FileChooser& fc)     
         {
             auto file = fc.getResult();
 
-            if (file != juce::File{})                                                // [9]
+            if (file != juce::File{})                                               
             {
-                auto* reader = formatManager.createReaderFor(file);                 // [10]
+                auto* reader = formatManager.createReaderFor(file);                
 
                 if (reader != nullptr)
                 {
-                    auto newSource = std::make_unique<juce::AudioFormatReaderSource>(reader, true);   // [11]
-                    transportSource.setSource(newSource.get(), 0, nullptr, reader->sampleRate);       // [12]
-                    playButton.setEnabled(true);                                                      // [13]
-                    readerSource.reset(newSource.release());                                          // [14]
+                    changeState(Stopped);//changes state so no play blocking occurs (if song is playing during selection of another song it causes soft block)
+                    auto newSource = std::make_unique<juce::AudioFormatReaderSource>(reader, true);                     
+                    transportSource.setSource(newSource.get(), 0, nullptr, reader->sampleRate);       
+                    playButton.setEnabled(true);                    
+                    this->playButtonClicked(); //plays song automatically                  
+                    readerSource.reset(newSource.release());                                          
                 }
             }
         });
