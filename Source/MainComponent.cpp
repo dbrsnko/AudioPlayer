@@ -1,7 +1,7 @@
 #include "MainComponent.h"
 
 //==============================================================================
-MainComponent::MainComponent() : state(Stopped)
+MainComponent::MainComponent() : state(Stopped),dragState(NotDragging)
 {
     // Make sure you set the size of the component after
     // you add any child components.
@@ -29,12 +29,15 @@ MainComponent::MainComponent() : state(Stopped)
 
     addAndMakeVisible(&progressSlider);
     progressSlider.setSliderStyle(juce::Slider::SliderStyle::LinearHorizontal);
-    progressSlider.setTextBoxStyle(juce::Slider::NoTextBox, true, 50, 25); //TODO make textbox appear/reapper after moving it
+    progressSlider.setTextBoxStyle(juce::Slider::NoTextBox, true, 50, 25); 
     progressSlider.setEnabled(false);
+    progressSlider.onDragStart = [this] {progressSliderDragStart(); };
+    progressSlider.onDragEnd = [this] {progressSliderDragEnd(); };
     
     addAndMakeVisible(&currentPositionLabel);
     currentPositionLabel.setText("Stopped", juce::dontSendNotification);
     addAndMakeVisible(&totalLengthLabel);
+    totalLengthLabel.setJustificationType(juce::Justification::right);
     totalLengthLabel.setText("00:00", juce::dontSendNotification);
     addAndMakeVisible(&hostLabel);
 
@@ -111,18 +114,17 @@ void MainComponent::resized()
 {
     auto area = getLocalBounds();
     auto contentItemHeight = 30;
+
     auto margin = 5;
 
     openButton.setBounds(area.removeFromTop(contentItemHeight));
-    progressSlider.setBounds(area.removeFromTop(contentItemHeight));
-    currentPositionLabel.setBounds(area.removeFromTop(contentItemHeight));
-    totalLengthLabel.setBounds(area.removeFromTop(contentItemHeight));
+    auto labelArea = area.removeFromTop(contentItemHeight);
 
-    //hostLabel.setBounds(area.removeFromTop(contentItemHeight+10));
+    hostLabel.setBounds(labelArea);
+    currentPositionLabel.setBounds(labelArea.removeFromLeft(labelArea.getWidth()/2));
+    totalLengthLabel.setBounds(labelArea.removeFromRight(labelArea.getWidth()));
 
-    
-    //currentPositionLabel.setBounds(area.removeFromLeft(contentItemHeight).reduced(margin));
-    //totalLengthLabel.setBounds(area.removeFromRight(area.getWidth() / 2));
+    progressSlider.setBounds(area.removeFromTop(contentItemHeight)); 
     playButton.setBounds(area.removeFromTop(contentItemHeight));
     stopButton.setBounds(area.removeFromTop(contentItemHeight));
     
@@ -144,26 +146,35 @@ void MainComponent::changeListenerCallback(juce::ChangeBroadcaster* source)
 }
 void MainComponent::timerCallback()
 {
-    if (transportSource.isPlaying())
-    {
-        juce::RelativeTime position(transportSource.getCurrentPosition());
-        
+    
+        if (transportSource.isPlaying())
+        {
+            juce::RelativeTime position(transportSource.getCurrentPosition());
+            auto minutes = ((int)position.inMinutes()) % 60;
+            auto seconds = ((int)position.inSeconds()) % 60;
+            auto positionString = juce::String::formatted("%02d:%02d", minutes, seconds);
+            currentPositionLabel.setText(positionString, juce::dontSendNotification);
+            progressSlider.setValue(transportSource.getCurrentPosition());
 
-        auto minutes = ((int)position.inMinutes()) % 60;
-        auto seconds = ((int)position.inSeconds()) % 60;
-
-        auto positionString = juce::String::formatted("%02d:%02d", minutes, seconds);
-        currentPositionLabel.setText(positionString, juce::dontSendNotification);
-        progressSlider.setValue(transportSource.getCurrentPosition());
-        
-    }
-    else
-    {
-        progressSlider.setValue(transportSource.getCurrentPosition());
-        if(transportSource.getCurrentPosition()==0)
-        currentPositionLabel.setText("00:00", juce::dontSendNotification);
+        }
+        else
+        {   
+            if (dragState == Dragging) {
+                juce::RelativeTime position(progressSlider.getValue());
+                auto minutes = ((int)position.inMinutes()) % 60;
+                auto seconds = ((int)position.inSeconds()) % 60;
+                auto positionString = juce::String::formatted("%02d:%02d", minutes, seconds);
+                currentPositionLabel.setText(positionString, juce::dontSendNotification);
+            }
+            else {
+                progressSlider.setValue(transportSource.getCurrentPosition());
+                if (transportSource.getCurrentPosition() == 0)
+                    currentPositionLabel.setText("00:00", juce::dontSendNotification);
+            }
             
-    }
+
+        }
+    
 }
 void MainComponent::changeState(TransportState newState){
     if (state != newState)
@@ -192,6 +203,7 @@ void MainComponent::changeState(TransportState newState){
             break;
 
         case Paused:
+            if(dragState == NotDragging)
             playButton.setButtonText("Resume");
             break;
 
@@ -256,4 +268,15 @@ void MainComponent::stopButtonClicked() {
         changeState(Stopping);
     
     DBG("clicked");
+}
+void MainComponent::progressSliderDragStart() {
+    dragState = Dragging;
+    changeState(Pausing);
+   
+}
+void MainComponent::progressSliderDragEnd() {
+    changeState(Starting);
+    dragState = NotDragging;
+    transportSource.setPosition(progressSlider.getValue());
+
 }

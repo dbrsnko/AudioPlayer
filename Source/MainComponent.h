@@ -37,6 +37,10 @@ private:
         Pausing, //Similar to Stop/Stopping
         Paused
     };
+    enum DragState {
+        Dragging,
+        NotDragging
+    };
 
     juce::TextButton openButton;
     juce::TextButton playButton;
@@ -48,6 +52,8 @@ private:
     void openButtonClicked();
     void playButtonClicked();
     void stopButtonClicked();
+    void progressSliderDragStart();
+    void progressSliderDragEnd();
     void changeState(TransportState newState);
     void changeListenerCallback(juce::ChangeBroadcaster* source) override;
     void timerCallback() override;
@@ -57,6 +63,7 @@ private:
     std::unique_ptr<juce::AudioFormatReaderSource> readerSource;
     juce::AudioTransportSource transportSource;
     TransportState state;
+    DragState dragState;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MainComponent)
 };
