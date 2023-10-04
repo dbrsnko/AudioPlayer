@@ -22,6 +22,7 @@ MainComponent::MainComponent() : state(Stopped),dragState(NotDragging)
     }
 
     formatManager.registerBasicFormats();
+ 
 
     addAndMakeVisible(&openButton);
     openButton.setButtonText("Open...");
@@ -52,6 +53,12 @@ MainComponent::MainComponent() : state(Stopped),dragState(NotDragging)
     stopButton.onClick = [this] { stopButtonClicked(); };
     stopButton.setColour(juce::TextButton::buttonColourId, juce::Colours::red);
     stopButton.setEnabled(false);
+
+    addAndMakeVisible(&listBox);
+    
+    
+    
+    
 
     transportSource.addChangeListener(this);
     startTimer(20); //20 ms interval
@@ -115,7 +122,6 @@ void MainComponent::resized()
     auto area = getLocalBounds();
     auto contentItemHeight = 30;
 
-    auto margin = 5;
 
     openButton.setBounds(area.removeFromTop(contentItemHeight));
     auto labelArea = area.removeFromTop(contentItemHeight);
@@ -127,6 +133,9 @@ void MainComponent::resized()
     progressSlider.setBounds(area.removeFromTop(contentItemHeight)); 
     playButton.setBounds(area.removeFromTop(contentItemHeight));
     stopButton.setBounds(area.removeFromTop(contentItemHeight));
+
+    listBox.setBounds(area.removeFromTop(area.getHeight()));
+    
     
     // This is called when the MainContentComponent is resized.
     // If you add any child components, this is where you should
@@ -146,35 +155,41 @@ void MainComponent::changeListenerCallback(juce::ChangeBroadcaster* source)
 }
 void MainComponent::timerCallback()
 {
+    juce::RelativeTime position;
+    if (dragState == NotDragging) {
+        position = position.seconds(transportSource.getCurrentPosition());
+        progressSlider.setValue(transportSource.getCurrentPosition());
+    }
+    else
+        position = position.seconds(progressSlider.getValue());
+    auto minutes = ((int)position.inMinutes()) % 60;
+    auto seconds = ((int)position.inSeconds()) % 60;
+    auto positionString = juce::String::formatted("%02d:%02d", minutes, seconds);
+    currentPositionLabel.setText(positionString, juce::dontSendNotification);
     
-        if (transportSource.isPlaying())
-        {
+    
+    /*
+    it works correctly but looks bad
+    if (dragState == NotDragging) {
+                
             juce::RelativeTime position(transportSource.getCurrentPosition());
             auto minutes = ((int)position.inMinutes()) % 60;
             auto seconds = ((int)position.inSeconds()) % 60;
             auto positionString = juce::String::formatted("%02d:%02d", minutes, seconds);
             currentPositionLabel.setText(positionString, juce::dontSendNotification);
             progressSlider.setValue(transportSource.getCurrentPosition());
+    }
+    else {
+        
+            juce::RelativeTime position(progressSlider.getValue());
+            auto minutes = ((int)position.inMinutes()) % 60;
+            auto seconds = ((int)position.inSeconds()) % 60;
+            auto positionString = juce::String::formatted("%02d:%02d", minutes, seconds);
+            currentPositionLabel.setText(positionString, juce::dontSendNotification);
+        
 
-        }
-        else
-        {   
-            if (dragState == Dragging) {
-                juce::RelativeTime position(progressSlider.getValue());
-                auto minutes = ((int)position.inMinutes()) % 60;
-                auto seconds = ((int)position.inSeconds()) % 60;
-                auto positionString = juce::String::formatted("%02d:%02d", minutes, seconds);
-                currentPositionLabel.setText(positionString, juce::dontSendNotification);
-            }
-            else {
-                progressSlider.setValue(transportSource.getCurrentPosition());
-                if (transportSource.getCurrentPosition() == 0)
-                    currentPositionLabel.setText("00:00", juce::dontSendNotification);
-            }
-            
-
-        }
-    
+    }
+  */
 }
 void MainComponent::changeState(TransportState newState){
     if (state != newState)
@@ -212,14 +227,53 @@ void MainComponent::changeState(TransportState newState){
             break;
         }
     }
-}
+} 
 
+void ListBoxComponent::resized() {
+    listBox.setBounds(getLocalBounds());
+}
+ListBoxComponent::ListBoxComponent() { //TODO
+    //setsource();
+    addAndMakeVisible(listBox);
+    formTracklist();
+    listBox.setModel(this);
+    
+
+    
+}
+void ListBoxComponent::paintListBoxItem(int rowNumber, juce::Graphics& g, int width, int height, bool rowIsSelected) { //TODO listboxmodel is here
+    if (rowIsSelected)
+        g.fillAll(juce::Colours::lightblue);
+    else
+        g.fillAll(juce::Colours::white);
+
+    g.setColour(juce::Colours::black);
+    g.drawText(tracklist[rowNumber].getFileName(), 0, 0, width, height, juce::Justification::centred);
+}
+int ListBoxComponent::getNumRows() {
+    DBG(tracklist.size());
+    DBG(tracklist[0].getFileName());
+    return tracklist.size();
+}
+void ListBoxComponent::setSource(juce::Array<juce::File>src) {
+    source = std::make_unique<juce::Array<juce::File>>(src);
+}
+void ListBoxComponent::formTracklist() {
+    juce::File defaultDirectory(juce::File::getSpecialLocation(juce::File::userMusicDirectory));
+    juce::Array<juce::File> tmp_arr = defaultDirectory.findChildFiles(juce::File::findFilesAndDirectories, 1, "*.waw;*.mp3;*.aiff"); 
+    //tmp_arr holds child files to be further iterated using addIfNotAlreadyThere();
+                                                                         
+   //TODO browse directories inside (consider them albums) and standalone songs
+   //it may be necessary to make those two processes separate(consecutive)
+   //other directories are stored inside juce::Array<juce::File> directories in maincomponent
+    for(int i=0;i<tmp_arr.size();i++)
+        tracklist.addIfNotAlreadyThere(tmp_arr[i]);
+    listBox.updateContent(); 
+   // directories.addArray(defaultDirectory.findChildFiles(juce::File::findFilesAndDirectories, 1, "*.waw;*.mp3;*.aiff"));
+}
 void MainComponent::openButtonClicked() {
-    chooser = std::make_unique<juce::FileChooser>("Select a file to play...",
-        juce::File{},
-        "*.wav,*.mp3,*.aiff");                     
-    auto chooserFlags = juce::FileBrowserComponent::openMode
-        | juce::FileBrowserComponent::canSelectFiles;
+    chooser = std::make_unique<juce::FileChooser>("Select a file to play...", juce::File{}, "*.wav,*.mp3,*.aiff");                     
+    auto chooserFlags = juce::FileBrowserComponent::openMode|juce::FileBrowserComponent::canSelectFiles;
 
     chooser->launchAsync(chooserFlags, [this](const juce::FileChooser& fc)     
         {
@@ -271,11 +325,11 @@ void MainComponent::stopButtonClicked() {
 }
 void MainComponent::progressSliderDragStart() {
     dragState = Dragging;
-    changeState(Pausing);
+    //changeState(Pausing);
    
 }
 void MainComponent::progressSliderDragEnd() {
-    changeState(Starting);
+    //changeState(Starting);
     dragState = NotDragging;
     transportSource.setPosition(progressSlider.getValue());
 
