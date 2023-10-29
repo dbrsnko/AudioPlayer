@@ -1,5 +1,4 @@
 #pragma once
-
 #include <JuceHeader.h>
 
 
@@ -8,8 +7,10 @@ class ListBoxComponent : public juce::Component,
                          
 {
 private:
-    std::unique_ptr<juce::Array<juce::File>> source;
+    std::unique_ptr<juce::AudioFormatReaderSource> readerSource;//exist to get track length
+    juce::AudioTransportSource transportSource; //exist to get track length
     juce::ListBox listBox;
+    juce::AudioFormatManager formatManager; 
 public:
     ListBoxComponent();
     //ListBoxComponent(juce::Array<juce::File>);
@@ -18,6 +19,7 @@ public:
     int getNumRows() override;
     void paintListBoxItem(int rowNumber, juce::Graphics& g, int width, int height, bool rowIsSelected) override;
     void resized() override;
+    void setRowHeight(int);
 
     //juce::Array<juce::File> directories; //places where tracks are located
     juce::Array<juce::File> tracklist; //tracks extracted from directories

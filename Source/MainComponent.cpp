@@ -55,6 +55,7 @@ MainComponent::MainComponent() : state(Stopped),dragState(NotDragging)
     stopButton.setEnabled(false);
 
     addAndMakeVisible(&listBox);
+
     
     
     
@@ -135,6 +136,8 @@ void MainComponent::resized()
     stopButton.setBounds(area.removeFromTop(contentItemHeight));
 
     listBox.setBounds(area.removeFromTop(area.getHeight()));
+    listBox.setRowHeight(contentItemHeight);
+    
     
     
     // This is called when the MainContentComponent is resized.
@@ -168,28 +171,7 @@ void MainComponent::timerCallback()
     currentPositionLabel.setText(positionString, juce::dontSendNotification);
     
     
-    /*
-    it works correctly but looks bad
-    if (dragState == NotDragging) {
-                
-            juce::RelativeTime position(transportSource.getCurrentPosition());
-            auto minutes = ((int)position.inMinutes()) % 60;
-            auto seconds = ((int)position.inSeconds()) % 60;
-            auto positionString = juce::String::formatted("%02d:%02d", minutes, seconds);
-            currentPositionLabel.setText(positionString, juce::dontSendNotification);
-            progressSlider.setValue(transportSource.getCurrentPosition());
-    }
-    else {
-        
-            juce::RelativeTime position(progressSlider.getValue());
-            auto minutes = ((int)position.inMinutes()) % 60;
-            auto seconds = ((int)position.inSeconds()) % 60;
-            auto positionString = juce::String::formatted("%02d:%02d", minutes, seconds);
-            currentPositionLabel.setText(positionString, juce::dontSendNotification);
-        
-
-    }
-  */
+    
 }
 void MainComponent::changeState(TransportState newState){
     if (state != newState)
@@ -228,12 +210,17 @@ void MainComponent::changeState(TransportState newState){
         }
     }
 } 
-
+void ListBoxComponent::setRowHeight(int size) {
+    listBox.setRowHeight(size);
+}
 void ListBoxComponent::resized() {
     listBox.setBounds(getLocalBounds());
+    
+
 }
 ListBoxComponent::ListBoxComponent() { //TODO
     //setsource();
+    formatManager.registerBasicFormats();
     addAndMakeVisible(listBox);
     formTracklist();
     listBox.setModel(this);
@@ -243,20 +230,56 @@ ListBoxComponent::ListBoxComponent() { //TODO
 }
 void ListBoxComponent::paintListBoxItem(int rowNumber, juce::Graphics& g, int width, int height, bool rowIsSelected) { //TODO listboxmodel is here
     if (rowIsSelected)
-        g.fillAll(juce::Colours::lightblue);
+        g.fillAll(juce::Colours::grey);
     else
         g.fillAll(juce::Colours::white);
+    
 
-    g.setColour(juce::Colours::black);
-    g.drawText(tracklist[rowNumber].getFileName(), 0, 0, width, height, juce::Justification::centred);
+    int lengthInSeconds;
+    //TODO fix memory leak after closing app
+    /*
+    if (auto reader = formatManager.createReaderFor(tracklist[rowNumber]))
+    {
+        lengthInSeconds = reader->lengthInSamples / reader->sampleRate;
+        DBG(lengthInSeconds);
+        // lengthInSeconds now contains the length of the audio file in seconds...
+    } */
+    //TODO: analyse this code block, merge it with one at top
+    if (tracklist[rowNumber] != juce::File{})
+    {
+        auto* reader = formatManager.createReaderFor(tracklist[rowNumber]);
+
+        if (reader != nullptr)
+        {
+            
+            auto newSource = std::make_unique<juce::AudioFormatReaderSource>(reader, true);
+            transportSource.setSource(newSource.get(), 0, nullptr, reader->sampleRate);
+
+            juce::RelativeTime position(transportSource.getLengthInSeconds());
+            auto minutes = ((int)position.inMinutes()) % 60;
+            auto seconds = ((int)position.inSeconds()) % 60;
+            auto positionString = juce::String::formatted("%02d:%02d", minutes, seconds);
+            
+            g.setColour(juce::Colours::black);
+            g.drawText(tracklist[rowNumber].getFileName(), 5, 0, width, height, juce::Justification::left); //TODO change "magic number" 5 (indentantion) to variable
+            g.drawText(positionString, -5, 0, width, height, juce::Justification::right); //same here
+            
+                           
+            readerSource.reset(newSource.release());
+        }
+    }
+    
+    /*
+    juce::RelativeTime position;
+    position = position.seconds(tracklist[rowNumber].getLengthInSeconds());
+    */
+   
 }
 int ListBoxComponent::getNumRows() {
-    DBG(tracklist.size());
-    DBG(tracklist[0].getFileName());
     return tracklist.size();
 }
 void ListBoxComponent::setSource(juce::Array<juce::File>src) {
-    source = std::make_unique<juce::Array<juce::File>>(src);
+    // TODO source = std::make_unique<juce::Array<juce::File>>(src);
 }
 void ListBoxComponent::formTracklist() {
     juce::File defaultDirectory(juce::File::getSpecialLocation(juce::File::userMusicDirectory));
